@@ -1,0 +1,8 @@
+Flask==3.0.0
+Werkzeug==3.0.1
+mysql-connector-python==8.1.0
+pandas==2.2.2
+scikit-learn==1.5.0
+python-dotenv==1.0.0
+numpy==1.26.0
+schedule==1.2.0

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Verify OTP - PriorityIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<nav class="topnav">
+    <h1>PriorityIQ</h1>
+</nav>
+
+<main class="container">
+
+    <div class="auth-container">
+        <h2>Verify OTP</h2>
+        
+        <div class="card form-card">
+
+            <label>Enter OTP:</label>
+            <input type="number" id="otp" placeholder="Enter 6-digit OTP" onkeypress="if(event.key==='Enter') verifyOTP()">
+
+            <button class="btn" onclick="verifyOTP()">Verify & Continue</button>
+
+            <button class="btn" style="background:#95a5a6; margin-top:10px"
+                    onclick="window.location.href='/login'">Back to Login</button>
+
+            <p id="msg" style="margin-top:15px; color:#e74c3c;"></p>
+
+        </div>
+    </div>
+
+</main>
+
+<script>
+async function verifyOTP() {
+    const otp = document.getElementById("otp").value;
+
+    if (!otp) {
+        document.getElementById("msg").innerText = "Please enter OTP";
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/auth/verify_otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ otp })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById("msg").innerText = "OTP Verified! Proceeding to face verification...";
+            document.getElementById("msg").style.color = "#2ecc71";
+            
+            // Store email for face verification
+            const email = sessionStorage.getItem('loginEmail');
+            sessionStorage.setItem('verifyEmail', email);
+            
+            // Redirect to face verification
+            setTimeout(() => { 
+                window.location.href = "/face-verify"; 
+            }, 1000);
+        } else {
+            document.getElementById("msg").innerText = data.message;
+            document.getElementById("msg").style.color = "#e74c3c";
+        }
+    } catch(e) {
+        document.getElementById("msg").innerText = "Verification failed. Please try again.";
+        document.getElementById("msg").style.color = "#e74c3c";
+    }
+}
+</script>
+
+</body>
+</html>

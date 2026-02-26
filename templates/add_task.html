@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add Task - PriorityIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script defer src="/static/script.js"></script>
+</head>
+
+<body>
+
+<nav class="topnav">
+    <h1>PriorityIQ</h1>
+
+    <div class="navlinks" id="navlinks">
+        <a href="/">Dashboard</a>
+        <a href="/add">Add Task</a>
+        <a href="/analytics">Analytics</a>
+        <span id="userBlock" style="margin-left:12px"></span>
+    </div>
+
+    <script>
+      async function refreshUserBlock(){
+        try{
+          const res = await fetch("/api/auth/status");
+          const j = await res.json();
+          const b = document.getElementById("userBlock");
+          if (j.logged_in){
+            b.innerHTML = `Logged in: ${j.email} 
+              <button onclick="logout()" class="btn" 
+                style="padding:4px 8px;margin-left:8px">Logout</button>`;
+          } else {
+            b.innerHTML = `<a href="/login">Login</a>`;
+          }
+        }catch(e){}
+      }
+
+      async function logout(){
+        await fetch("/api/auth/logout", {method:"POST"});
+        window.location.href = "/login";
+      }
+
+      document.addEventListener("DOMContentLoaded", refreshUserBlock);
+    </script>
+</nav>
+
+<main class="container">
+    <h2>Add a New Task</h2>
+
+    <div class="card form-card">
+
+        <label>Task Title</label>
+        <input type="text" id="title">
+
+        <label>Description</label>
+        <textarea id="description"></textarea>
+
+        <label>Deadline</label>
+        <input type="date" id="deadline">
+
+        <label>Urgency (1–5)</label>
+        <input type="number" min="1" max="5" id="urgency">
+
+        <label>Complexity (1–5)</label>
+        <input type="number" min="1" max="5" id="complexity">
+
+        <label>Estimated Hours</label>
+        <input type="number" step="0.5" id="est_hours">
+
+        <label>Category (Optional)</label>
+        <select id="category">
+            <option value="">Select Category</option>
+            <option value="Work">💼 Work</option>
+            <option value="Personal">👤 Personal</option>
+            <option value="Urgent">🔥 Urgent</option>
+            <option value="Health">💪 Health</option>
+            <option value="Learning">📚 Learning</option>
+            <option value="Other">📌 Other</option>
+        </select>
+
+        <button class="btn" onclick="predictAndSave()">Predict & Save</button>
+
+        <div id="predictMsg" style="margin-top:10px;"></div>
+
+    </div>
+
+</main>
+
+<script>
+async function predictAndSave(){
+    const title = document.getElementById("title").value;
+    const description = document.getElementById("description").value;
+    const deadline = document.getElementById("deadline").value;
+    const urgency = document.getElementById("urgency").value;
+    const complexity = document.getElementById("complexity").value;
+    const est_hours = document.getElementById("est_hours").value;
+    const category = document.getElementById("category").value;
+
+    if(!title || !deadline){
+        document.getElementById("predictMsg").innerText = "Please fill title & deadline!";
+        return;
+    }
+
+    // 1: Quick Prediction
+    const predRes = await fetch("/api/predict/quick", {
+        method:"POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ urgency, complexity, est_hours, deadline })
+    });
+
+    const predJson = await predRes.json();
+    const priority = predJson.predicted_priority;
+
+    // 2: Save Task
+    const saveRes = await fetch("/api/tasks/add", {
+        method:"POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+            title, description, deadline, urgency, complexity, est_hours,
+            priority_level: priority,
+            category: category,
+            status: "Pending"
+        })
+    });
+
+    const saveJson = await saveRes.json();
+    document.getElementById("predictMsg").innerText = "Task saved with priority: " + priority;
+
+    setTimeout(()=>{ window.location.href="/"; }, 800);
+}
+</script>
+
+</body>
+</html>

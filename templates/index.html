@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4CAF50">
+    <meta name="description" content="AI-powered task management with smart priority prediction">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PriorityIQ">
+    <title>PriorityIQ - Dashboard</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/png" href="/static/icon-192.png">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link rel="stylesheet" href="/static/style.css">
+    <script defer src="/static/confetti.js"></script>
+    <script defer src="/static/deadline-alerts.js"></script>
+    <script defer src="/static/script.js"></script>
+    <script defer src="/static/pwa.js"></script>
+</head>
+
+<body>
+
+<nav class="topnav">
+    <h1>PriorityIQ</h1>
+
+    <div class="navlinks" id="navlinks">
+        <a href="/">Dashboard</a>
+        <a href="/add">Add Task</a>
+        <a href="/kanban">Kanban</a>
+        <a href="/calendar">Calendar</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/admin" id="adminLink" style="display:none;">🎓 Admin</a>
+        <button onclick="toggleDarkMode()" class="btn-small" style="margin-left:10px;">🌙 Dark</button>
+        <button id="installBtn" class="btn-small" style="margin-left:10px; display:none;">📱 Install App</button>
+        
+        <!-- User Menu Dropdown -->
+        <div class="user-menu" style="margin-left:12px;">
+            <button class="btn-small" onclick="toggleUserMenu()" id="userMenuBtn">
+                ☰ Menu
+            </button>
+            <div class="user-dropdown" id="userDropdown" style="display:none;">
+                <a href="#" onclick="showAbout()">ℹ️ About</a>
+                <a href="#" onclick="showSettings()">⚙️ Settings</a>
+                <a href="#" onclick="showProfile()">👤 Profile</a>
+                <a href="#" onclick="showCustomerCare()">📞 Customer Care</a>
+                <hr style="margin:5px 0; border:none; border-top:1px solid #ddd;">
+                <a href="#" onclick="logout()" style="color:#e74c3c;">🚪 Logout</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+      function toggleUserMenu() {
+        const dropdown = document.getElementById('userDropdown');
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+      }
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.user-menu')) {
+          document.getElementById('userDropdown').style.display = 'none';
+        }
+      });
+      
+      async function refreshUserBlock(){
+        try{
+          const res = await fetch("/api/auth/status");
+          const j = await res.json();
+          const btn = document.getElementById("userMenuBtn");
+          if (j.logged_in){
+            btn.innerHTML = `👤 ${j.name || j.email.split('@')[0]}`;
+          }
+          
+          // Check admin status
+          const adminRes = await fetch("/api/admin/check");
+          const adminData = await adminRes.json();
+          if (adminData.is_admin) {
+            document.getElementById('adminLink').style.display = 'inline-block';
+          }
+        }catch(e){}
+      }
+
+      async function logout(){
+        await fetch("/api/auth/logout", {method:"POST"});
+        window.location.href = "/login";
+      }
+
+      document.addEventListener("DOMContentLoaded", refreshUserBlock);
+    </script>
+</nav>
+
+<main class="container">
+    
+    <div id="riskAlert" class="risk-alert" style="display:none;"></div>
+    
+    <!-- Search and Filter Bar -->
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="🔍 Search tasks... (Ctrl+K)" onkeyup="searchTasks()">
+        <select id="statusFilter" onchange="searchTasks()">
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+        </select>
+        <select id="priorityFilter" onchange="searchTasks()">
+            <option value="">All Priority</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+        </select>
+        <button onclick="exportCSV()" class="btn-small">📥 Export CSV</button>
+        <button onclick="exportICS()" class="btn-small">Export ICS</button>
+        <button onclick="importICS()" class="btn-small">Import ICS</button>
+        <button onclick="openNotificationsCenter()" class="btn-small">Notifications</button>
+        <button onclick="requestNotificationPermission()" class="btn-small">🔔 Enable Notifications</button>
+    </div>
+
+    <!-- Task Statistics Widget -->
+    <div class="stats-mini">
+        <div class="stat-mini">
+            <span id="statTotal">0</span>
+            <p>Total</p>
+        </div>
+        <div class="stat-mini">
+            <span id="statPending">0</span>
+            <p>Pending</p>
+        </div>
+        <div class="stat-mini">
+            <span id="statCompleted">0</span>
+            <p>Completed</p>
+        </div>
+        <div class="stat-mini">
+            <span id="statAvgHours">0</span>
+            <p>Avg Hours</p>
+        </div>
+    </div>
+    
+    <h2>Your Tasks</h2>
+
+    <div id="taskList" class="task-list"></div>
+
+</main>
+
+<!-- Floating Action Buttons (Bottom Right) -->
+<div class="fab-container">
+    <!-- AI Chatbot FAB -->
+    <div class="fab-item" onclick="toggleFab('chatbotFab')">
+        <div class="fab-icon chatbot-fab">🤖</div>
+        <div class="fab-popup fab-popup-large" id="chatbotFab" style="display:none;">
+            <div class="fab-popup-header">
+                <span>🤖 AI Assistant</span>
+                <span onclick="toggleFab('chatbotFab'); event.stopPropagation();" style="cursor:pointer;">×</span>
+            </div>
+            <div class="fab-popup-body" style="padding:0;">
+                <div class="chat-messages-fab" id="chatMessages">
+                    <div class="bot-message">
+                        👋 Hi! I'm your AI task assistant. Ask me anything!
+                    </div>
+                </div>
+                <div class="chat-input-fab">
+                    <input type="text" id="chatInput" placeholder="Ask me anything..." onkeypress="if(event.key==='Enter') {sendMessage(); event.stopPropagation();}" onclick="event.stopPropagation();">
+                    <button onclick="sendMessage(); event.stopPropagation();" class="chat-send-btn">➤</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Progress FAB -->
+    <div class="fab-item" onclick="toggleFab('progressFab')">
+        <div class="fab-icon">🏆</div>
+        <div class="fab-popup" id="progressFab" style="display:none;">
+            <div class="fab-popup-header">
+                <span>🏆 Your Progress</span>
+                <span onclick="toggleFab('progressFab'); event.stopPropagation();" style="cursor:pointer;">×</span>
+            </div>
+            <div class="fab-popup-body">
+                <div class="progress-circle">
+                    <svg width="100" height="100">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#e0e0e0" stroke-width="8"/>
+                        <circle id="progressCircle" cx="50" cy="50" r="45" fill="none" stroke="url(#gradient)" stroke-width="8" stroke-dasharray="283" stroke-dashoffset="283" transform="rotate(-90 50 50)"/>
+                        <defs>
+                            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="progress-text" id="pointsDisplay">0</div>
+                </div>
+                <div class="progress-stats">
+                    <div class="stat-item">
+                        <span class="stat-icon">⭐</span>
+                        <span id="levelBadge">Level 1</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">🔥</span>
+                        <span id="streakDisplay">0 days</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Timer FAB -->
+    <div class="fab-item" onclick="toggleFab('timerFab')">
+        <div class="fab-icon">⏱️</div>
+        <div class="fab-popup" id="timerFab" style="display:none;">
+            <div class="fab-popup-header">
+                <span>⏱️ Pomodoro Timer</span>
+                <span onclick="toggleFab('timerFab'); event.stopPropagation();" style="cursor:pointer;">×</span>
+            </div>
+            <div class="fab-popup-body">
+                <div class="timer-circle">
+                    <svg width="120" height="120">
+                        <circle cx="60" cy="60" r="55" fill="none" stroke="#e0e0e0" stroke-width="6"/>
+                        <circle id="timerCircle" cx="60" cy="60" r="55" fill="none" stroke="#4b5cff" stroke-width="6" stroke-dasharray="345" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+                    </svg>
+                    <div class="timer-text" id="timerDisplay">25:00</div>
+                </div>
+                <div class="timer-controls-fab">
+                    <button class="fab-btn start" onclick="startTimer(); event.stopPropagation();">▶ Start</button>
+                    <button class="fab-btn pause" onclick="pauseTimer(); event.stopPropagation();">⏸ Pause</button>
+                    <button class="fab-btn reset" onclick="resetTimer(); event.stopPropagation();">🔄 Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleFab(id) {
+    const popup = document.getElementById(id);
+    const allPopups = document.querySelectorAll('.fab-popup');
+    allPopups.forEach(p => {
+        if (p.id !== id) p.style.display = 'none';
+    });
+    popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close FABs when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.fab-container')) {
+        document.querySelectorAll('.fab-popup').forEach(p => p.style.display = 'none');
+    }
+});
+</script>
+
+<!-- Keyboard Shortcuts Help -->
+<div id="shortcutsHelp" class="shortcuts-modal" style="display:none;">
+    <div class="modal-content">
+        <h3>⌨️ Keyboard Shortcuts</h3>
+        <ul style="text-align:left;">
+            <li><kbd>Ctrl</kbd> + <kbd>K</kbd> - Focus search</li>
+            <li><kbd>Ctrl</kbd> + <kbd>N</kbd> - New task</li>
+            <li><kbd>Ctrl</kbd> + <kbd>D</kbd> - Toggle dark mode</li>
+            <li><kbd>Ctrl</kbd> + <kbd>E</kbd> - Export CSV</li>
+            <li><kbd>?</kbd> - Show this help</li>
+            <li><kbd>Esc</kbd> - Close modals</li>
+        </ul>
+        <button class="btn" onclick="closeShortcutsHelp()">Got it!</button>
+    </div>
+</div>
+
+<!-- About Modal -->
+<div id="aboutModal" class="shortcuts-modal" style="display:none;">
+    <div class="modal-content">
+        <h3>ℹ️ About PriorityIQ</h3>
+        <p><strong>Version:</strong> 1.0.0</p>
+        <p><strong>Features:</strong> 43+ productivity features</p>
+        <p>AI-powered task management with smart priority prediction, face recognition security, and gamification.</p>
+        <button class="btn" onclick="closeModal('aboutModal')">Close</button>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="shortcuts-modal" style="display:none;">
+    <div class="modal-content">
+        <h3>⚙️ Settings</h3>
+        <div style="text-align:left; padding:10px;">
+            <label><input type="checkbox" id="notifEnabled" onchange="toggleNotifications()"> Enable Notifications</label><br><br>
+            <label><input type="checkbox" id="darkModeEnabled" onchange="toggleDarkMode()"> Dark Mode</label><br><br>
+            <label><input type="checkbox" id="soundEnabled"> Sound Effects</label><br><br>
+            <button class="btn" onclick="clearCache()">Clear Cache</button>
+        </div>
+        <button class="btn" onclick="closeModal('settingsModal')">Close</button>
+    </div>
+</div>
+
+<!-- Profile Modal -->
+<div id="profileModal" class="shortcuts-modal" style="display:none;">
+    <div class="modal-content">
+        <h3>👤 Profile</h3>
+        <div id="profileInfo" style="text-align:left; padding:10px;"></div>
+        <button class="btn" onclick="closeModal('profileModal')">Close</button>
+    </div>
+</div>
+
+<!-- Customer Care Modal -->
+<div id="customerCareModal" class="shortcuts-modal" style="display:none;">
+    <div class="modal-content">
+        <h3>📞 Customer Care</h3>
+        <p><strong>Email:</strong> support@priorityiq.com</p>
+        <p><strong>Phone:</strong> +1 (555) 123-4567</p>
+        <p><strong>Hours:</strong> Mon-Fri, 9AM-5PM EST</p>
+        <p>Need help? Contact us anytime!</p>
+        <button class="btn" onclick="closeModal('customerCareModal')">Close</button>
+    </div>
+</div>
+
+<div id="notificationsModal" class="shortcuts-modal" style="display:none;">
+    <div class="modal-content">
+        <h3>Notifications Center</h3>
+        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+            <button class="btn-small" onclick="markAllNotificationsRead()">Mark all as read</button>
+        </div>
+        <div id="notificationsList" style="max-height:320px; overflow:auto; text-align:left;"></div>
+        <button class="btn" onclick="closeModal('notificationsModal')">Close</button>
+    </div>
+</div>
+
+<div id="adminWarningModal" class="shortcuts-modal" style="display:none;">
+    <div id="adminWarningContent" class="modal-content admin-warning-content warning-level-warning">
+        <h3 id="adminWarningTitle">Warning</h3>
+        <p id="adminWarningSubtitle" style="margin-top:0;">Important announcement from admin:</p>
+        <div id="adminWarningList" class="admin-warning-list"></div>
+        <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+            <button class="btn" onclick="acknowledgeAdminWarnings()">I Understand</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAbout() {
+    document.getElementById('aboutModal').style.display = 'flex';
+    document.getElementById('userDropdown').style.display = 'none';
+}
+
+function showSettings() {
+    document.getElementById('settingsModal').style.display = 'flex';
+    document.getElementById('userDropdown').style.display = 'none';
+}
+
+async function showProfile() {
+    const res = await fetch('/api/auth/status');
+    const data = await res.json();
+    const info = document.getElementById('profileInfo');
+    info.innerHTML = `
+        <p><strong>Name:</strong> ${data.name || 'N/A'}</p>
+        <p><strong>Email:</strong> ${data.email || 'N/A'}</p>
+        <p><strong>Member Since:</strong> ${new Date().toLocaleDateString()}</p>
+    `;
+    document.getElementById('profileModal').style.display = 'flex';
+    document.getElementById('userDropdown').style.display = 'none';
+}
+
+function showCustomerCare() {
+    document.getElementById('customerCareModal').style.display = 'flex';
+    document.getElementById('userDropdown').style.display = 'none';
+}
+
+function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+}
+
+function clearCache() {
+    if (confirm('Clear all cached data?')) {
+        localStorage.clear();
+        sessionStorage.clear();
+        alert('Cache cleared!');
+    }
+}
+</script>
+
+</body>
+</html>

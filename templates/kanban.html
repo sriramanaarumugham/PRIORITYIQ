@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kanban Board - PriorityIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<nav class="topnav">
+    <h1>PriorityIQ</h1>
+    <div class="navlinks">
+        <a href="/">Dashboard</a>
+        <a href="/add">Add Task</a>
+        <a href="/kanban">Kanban</a>
+        <a href="/calendar">Calendar</a>
+        <a href="/analytics">Analytics</a>
+        <button onclick="toggleDarkMode()" class="btn-small" style="margin-left:10px;">🌙 Dark</button>
+        <span id="userBlock" style="margin-left:12px"></span>
+    </div>
+    <script>
+      async function refreshUserBlock(){
+        const res = await fetch("/api/auth/status");
+        const j = await res.json();
+        const b = document.getElementById("userBlock");
+        if (j.logged_in){
+          b.innerHTML = `${j.email} <button onclick="logout()" class="btn" style="padding:4px 8px;margin-left:8px">Logout</button>`;
+        }
+      }
+      async function logout(){ await fetch("/api/auth/logout", {method:"POST"}); window.location.href = "/login"; }
+      function toggleDarkMode() { document.body.classList.toggle("dark-mode"); localStorage.setItem("darkMode", document.body.classList.contains("dark-mode")); }
+      document.addEventListener("DOMContentLoaded", () => { refreshUserBlock(); if (localStorage.getItem("darkMode") === "true") document.body.classList.add("dark-mode"); });
+    </script>
+</nav>
+
+<main class="container">
+    <h2>📋 Kanban Board</h2>
+    
+    <div class="kanban-board">
+        <div class="kanban-column">
+            <h3 class="column-header pending">📝 To Do</h3>
+            <div id="pendingColumn" class="task-container" ondrop="drop(event, 'Pending')" ondragover="allowDrop(event)"></div>
+        </div>
+        
+        <div class="kanban-column">
+            <h3 class="column-header progress">⚡ In Progress</h3>
+            <div id="progressColumn" class="task-container" ondrop="drop(event, 'In Progress')" ondragover="allowDrop(event)"></div>
+        </div>
+        
+        <div class="kanban-column">
+            <h3 class="column-header completed">✅ Completed</h3>
+            <div id="completedColumn" class="task-container" ondrop="drop(event, 'Completed')" ondragover="allowDrop(event)"></div>
+        </div>
+    </div>
+</main>
+
+<script>
+let allTasks = [];
+
+async function loadTasks() {
+    try {
+        const res = await fetch("/api/tasks/all");
+        if (res.ok) {
+            allTasks = await res.json();
+            renderKanban();
+        }
+    } catch(e) {
+        console.error("Error:", e);
+    }
+}
+
+function renderKanban() {
+    document.getElementById("pendingColumn").innerHTML = "";
+    document.getElementById("progressColumn").innerHTML = "";
+    document.getElementById("completedColumn").innerHTML = "";
+    
+    allTasks.forEach(task => {
+        const card = createTaskCard(task);
+        
+        if (task.status === "Pending") {
+            document.getElementById("pendingColumn").appendChild(card);
+        } else if (task.status === "In Progress") {
+            document.getElementById("progressColumn").appendChild(card);
+        } else if (task.status === "Completed") {
+            document.getElementById("completedColumn").appendChild(card);
+        }
+    });
+}
+
+function createTaskCard(task) {
+    const card = document.createElement("div");
+    card.className = "kanban-card";
+    card.draggable = true;
+    card.id = `task-${task.task_id}`;
+    card.ondragstart = (e) => drag(e, task.task_id);
+    
+    const priorityColor = task.priority_level === "High" ? "#ff3b3b" : 
+                         task.priority_level === "Medium" ? "#ff9d2e" : "#2ecc71";
+    
+    card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:start;">
+            <strong>${task.title}</strong>
+            <span class="priority-tag ${task.priority_level?.toLowerCase()}" style="font-size:11px; padding:3px 8px;">${task.priority_level || "NA"}</span>
+        </div>
+        <p style="font-size:13px; color:#666; margin:8px 0;">${task.description || ""}</p>
+        <div style="font-size:12px; color:#999;">
+            <span>📅 ${task.deadline}</span>
+            ${task.category ? `<span style="margin-left:10px;">🏷️ ${task.category}</span>` : ""}
+        </div>
+    `;
+    
+    return card;
+}
+
+function allowDrop(ev) {
+    ev.preventDefault();
+}
+
+function drag(ev, taskId) {
+    ev.dataTransfer.setData("taskId", taskId);
+}
+
+async function drop(ev, newStatus) {
+    ev.preventDefault();
+    const taskId = ev.dataTransfer.getData("taskId");
+    
+    try {
+        const res = await fetch(`/api/tasks/update/${taskId}`, {
+            method: "PUT",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ status: newStatus })
+        });
+        
+        if (res.ok) {
+            loadTasks();
+        }
+    } catch(e) {
+        console.error("Error:", e);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", loadTasks);
+</script>
+
+</body>
+</html>

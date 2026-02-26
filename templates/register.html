@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register - PriorityIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<nav class="topnav">
+    <h1>PriorityIQ</h1>
+    <div class="navlinks">
+        <a href="/login">Login</a>
+    </div>
+</nav>
+
+<main class="container">
+    <div class="auth-container">
+        <h2>Create Account</h2>
+        
+        <div class="card form-card" onkeypress="if(event.key==='Enter') register()">
+            <label>Full Name *</label>
+            <input type="text" id="name" placeholder="Enter your full name" required>
+
+            <label>Email *</label>
+            <input type="email" id="email" placeholder="Enter your email" required>
+
+            <label>Phone Number *</label>
+            <input type="tel" id="phone" placeholder="Enter 10-digit phone number" required>
+
+            <label>Role *</label>
+            <select id="role" required>
+                <option value="">Select Role</option>
+                <option value="Student">Student</option>
+                <option value="Admin">Admin (College Staff)</option>
+                <option value="Professional">Professional</option>
+                <option value="Freelancer">Freelancer</option>
+                <option value="Manager">Manager</option>
+                <option value="Other">Other</option>
+            </select>
+
+            <label>Age</label>
+            <input type="number" id="age" placeholder="Enter your age" min="13" max="120">
+
+            <label>Gender</label>
+            <select id="gender">
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+                <option value="Prefer not to say">Prefer not to say</option>
+            </select>
+
+            <button class="btn" onclick="register()">Register</button>
+
+            <div id="message" style="margin-top:15px; color: #e74c3c;"></div>
+
+            <p style="text-align:center; margin-top:20px;">
+                Already have an account? <a href="/login">Login here</a>
+            </p>
+        </div>
+    </div>
+</main>
+
+<script>
+async function register() {
+    const name = document.getElementById("name").value.trim();
+    const email = document.getElementById("email").value.trim();
+    const phone = document.getElementById("phone").value.trim();
+    const role = document.getElementById("role").value;
+    const age = document.getElementById("age").value;
+    const gender = document.getElementById("gender").value;
+
+    const msgDiv = document.getElementById("message");
+
+    if (!name || !email || !phone || !role) {
+        msgDiv.innerText = "Name, email, phone, and role are required!";
+        msgDiv.style.color = "#e74c3c";
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ name, email, phone, role, age, gender })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            msgDiv.innerText = data.message;
+            msgDiv.style.color = "#2ecc71";
+            setTimeout(() => {
+                window.location.href = "/login";
+            }, 1500);
+        } else {
+            msgDiv.innerText = data.message;
+            msgDiv.style.color = "#e74c3c";
+        }
+    } catch (e) {
+        msgDiv.innerText = "Registration failed. Please try again.";
+        msgDiv.style.color = "#e74c3c";
+    }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - PriorityIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .admin-container { max-width: 1400px; margin: 20px auto; padding: 20px; }
+        .admin-tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab-btn { padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+        .tab-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        .tab-btn.active { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .tab-content { display: none; animation: fadeIn 0.5s; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .admin-card { background: white; border-radius: 12px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #333; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; transition: border 0.3s; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #667eea; outline: none; }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        .btn-danger { background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%); color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .data-table th { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px; text-align: left; }
+        .data-table td { padding: 12px; border-bottom: 1px solid #e0e0e0; }
+        .data-table tr:hover { background: #f5f5f5; }
+        .badge { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-high { background: #ffebee; color: #c62828; }
+        .badge-medium { background: #fff3e0; color: #ef6c00; }
+        .badge-low { background: #e8f5e9; color: #2e7d32; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .access-denied { text-align: center; padding: 60px 20px; }
+        .access-denied h2 { color: #f5576c; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <h1 style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px;">🎓 College Admin Panel</h1>
+        <p style="color: #666; margin-bottom: 30px;">Manage exam schedules, events, attendance, and announcements</p>
+
+        <div id="accessDenied" style="display: none;" class="access-denied">
+            <h2>⛔ Access Denied</h2>
+            <p>You need admin privileges to access this panel.</p>
+            <button onclick="window.location.href='/'" class="btn-primary" style="margin-top: 20px;">Back to Dashboard</button>
+        </div>
+
+        <div id="adminContent" style="display: none;">
+            <div class="admin-tabs">
+                <button class="tab-btn active" onclick="switchTab('exams')">📝 Exam Schedules</button>
+                <button class="tab-btn" onclick="switchTab('events')">🎉 College Events</button>
+                <button class="tab-btn" onclick="switchTab('attendance')">✅ Attendance</button>
+                <button class="tab-btn" onclick="switchTab('announcements')">📢 Announcements</button>
+            </div>
+
+            <!-- Exam Schedules Tab -->
+            <div id="exams" class="tab-content active">
+                <div class="admin-card">
+                    <h3>➕ Add Exam Schedule</h3>
+                    <form id="examForm" onsubmit="addExam(event)">
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Department</label>
+                                <select id="examDept" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Subject Name</label>
+                                <input type="text" id="examSubject" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Exam Date</label>
+                                <input type="date" id="examDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Exam Time</label>
+                                <input type="time" id="examTime" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Duration (minutes)</label>
+                                <input type="number" id="examDuration" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Room Number</label>
+                                <input type="text" id="examRoom">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary">Add Exam</button>
+                    </form>
+                </div>
+
+                <div class="admin-card">
+                    <h3>📋 Exam Schedules</h3>
+                    <select id="filterDept" onchange="loadExams()" style="margin-bottom: 15px; padding: 10px; border-radius: 8px; border: 2px solid #e0e0e0;">
+                        <option value="">All Departments</option>
+                    </select>
+                    <table class="data-table" id="examsTable">
+                        <thead><tr><th>Department</th><th>Subject</th><th>Date</th><th>Time</th><th>Duration</th><th>Room</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Events Tab -->
+            <div id="events" class="tab-content">
+                <div class="admin-card">
+                    <h3>➕ Add College Event</h3>
+                    <form id="eventForm" onsubmit="addEvent(event)">
+                        <div class="form-group">
+                            <label>Event Name</label>
+                            <input type="text" id="eventName" required>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Event Date</label>
+                                <input type="date" id="eventDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Event Time</label>
+                                <input type="time" id="eventTime">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" id="eventLocation">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea id="eventDesc" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn-primary">Add Event</button>
+                    </form>
+                </div>
+
+                <div class="admin-card">
+                    <h3>📋 College Events</h3>
+                    <table class="data-table" id="eventsTable">
+                        <thead><tr><th>Event Name</th><th>Date</th><th>Time</th><th>Location</th><th>Description</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Attendance Tab -->
+            <div id="attendance" class="tab-content">
+                <div class="admin-card">
+                    <h3>✅ Mark Attendance</h3>
+                    <form id="attendanceForm" onsubmit="markAttendance(event)">
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>User Email</label>
+                                <input type="email" id="attEmail" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Department</label>
+                                <select id="attDept" required></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Date</label>
+                                <input type="date" id="attDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select id="attStatus" required>
+                                    <option value="Present">Present</option>
+                                    <option value="Absent">Absent</option>
+                                    <option value="Late">Late</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary">Mark Attendance</button>
+                    </form>
+                </div>
+
+                <div class="admin-card">
+                    <h3>📋 Attendance Records</h3>
+                    <table class="data-table" id="attendanceTable">
+                        <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Date</th><th>Status</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Announcements Tab -->
+            <div id="announcements" class="tab-content">
+                <div class="admin-card">
+                    <h3>➕ Add Announcement</h3>
+                    <form id="announcementForm" onsubmit="addAnnouncement(event)">
+                        <div class="form-group">
+                            <label>Title</label>
+                            <input type="text" id="annTitle" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Content</label>
+                            <textarea id="annContent" rows="4" required></textarea>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Priority</label>
+                                <select id="annPriority">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Target Department</label>
+                                <select id="annAudience">
+                                    <option value="All">All Departments</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary">Add Announcement</button>
+                    </form>
+                </div>
+
+                <div class="admin-card">
+                    <h3>📋 Announcements</h3>
+                    <table class="data-table" id="announcementsTable">
+                        <thead><tr><th>Title</th><th>Content</th><th>Priority</th><th>Target Department</th><th>Date</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let departments = [];
+
+        async function checkAdmin() {
+            const res = await fetch('/api/admin/check');
+            const data = await res.json();
+            if (data.is_admin) {
+                document.getElementById('adminContent').style.display = 'block';
+                loadDepartments();
+                loadExams();
+                loadEvents();
+                loadAttendance();
+                loadAnnouncements();
+            } else {
+                document.getElementById('accessDenied').style.display = 'block';
+            }
+        }
+
+        async function loadDepartments() {
+            const res = await fetch('/api/admin/departments');
+            departments = await res.json();
+            const selects = ['examDept', 'attDept', 'filterDept', 'annAudience'];
+            selects.forEach(id => {
+                const sel = document.getElementById(id);
+                if (id === 'filterDept') {
+                    sel.innerHTML = '<option value="">All Departments</option>';
+                } else if (id === 'annAudience') {
+                    sel.innerHTML = '<option value="All">All Departments</option>';
+                } else {
+                    sel.innerHTML = '';
+                }
+                departments.forEach(d => {
+                    sel.innerHTML += `<option value="${d.dept_id}">${d.dept_name} (${d.dept_code})</option>`;
+                });
+            });
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tab).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function addExam(e) {
+            e.preventDefault();
+            const data = {
+                dept_id: document.getElementById('examDept').value,
+                subject_name: document.getElementById('examSubject').value,
+                exam_date: document.getElementById('examDate').value,
+                exam_time: document.getElementById('examTime').value,
+                duration_mins: document.getElementById('examDuration').value,
+                room_no: document.getElementById('examRoom').value
+            };
+            console.log('Adding exam:', data);
+            try {
+                const res = await fetch('/api/admin/exams/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const result = await res.json();
+                console.log('Response:', result);
+                if (res.ok && result.success) {
+                    alert('Exam added successfully!');
+                    document.getElementById('examForm').reset();
+                    loadExams();
+                } else {
+                    alert('Error: ' + (result.message || 'Failed to add exam'));
+                }
+            } catch (error) {
+                console.error('Error adding exam:', error);
+                alert('Error adding exam: ' + error.message);
+            }
+        }
+
+        async function loadExams() {
+            try {
+                const deptId = document.getElementById('filterDept').value;
+                const res = await fetch(`/api/admin/exams/all${deptId ? '?dept_id=' + deptId : ''}`);
+                const exams = await res.json();
+                console.log('Loaded exams:', exams);
+                const tbody = document.querySelector('#examsTable tbody');
+                if (exams.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No exams scheduled</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = exams.map(e => `
+                    <tr>
+                        <td>${e.dept_code}</td>
+                        <td>${e.subject_name}</td>
+                        <td>${e.exam_date}</td>
+                        <td>${e.exam_time || '-'}</td>
+                        <td>${e.duration_mins} min</td>
+                        <td>${e.room_no || '-'}</td>
+                        <td><button class="btn-danger" onclick="deleteExam(${e.exam_id})">Delete</button></td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading exams:', error);
+            }
+        }
+
+        async function deleteExam(id) {
+            if (!confirm('Delete this exam?')) return;
+            await fetch(`/api/admin/exams/delete/${id}`, {method: 'DELETE'});
+            loadExams();
+        }
+
+        async function addEvent(e) {
+            e.preventDefault();
+            const data = {
+                event_name: document.getElementById('eventName').value,
+                event_date: document.getElementById('eventDate').value,
+                event_time: document.getElementById('eventTime').value,
+                location: document.getElementById('eventLocation').value,
+                description: document.getElementById('eventDesc').value
+            };
+            const res = await fetch('/api/admin/events/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                alert('Event added successfully!');
+                document.getElementById('eventForm').reset();
+                loadEvents();
+            }
+        }
+
+        async function loadEvents() {
+            const res = await fetch('/api/admin/events/all');
+            const events = await res.json();
+            const tbody = document.querySelector('#eventsTable tbody');
+            tbody.innerHTML = events.map(e => `
+                <tr>
+                    <td>${e.event_name}</td>
+                    <td>${e.event_date}</td>
+                    <td>${e.event_time || '-'}</td>
+                    <td>${e.location || '-'}</td>
+                    <td>${e.description || '-'}</td>
+                    <td><button class="btn-danger" onclick="deleteEvent(${e.event_id})">Delete</button></td>
+                </tr>
+            `).join('');
+        }
+
+        async function deleteEvent(id) {
+            if (!confirm('Delete this event?')) return;
+            await fetch(`/api/admin/events/delete/${id}`, {method: 'DELETE'});
+            loadEvents();
+        }
+
+        async function markAttendance(e) {
+            e.preventDefault();
+            const data = {
+                email: document.getElementById('attEmail').value,
+                dept_id: document.getElementById('attDept').value,
+                attendance_date: document.getElementById('attDate').value,
+                status: document.getElementById('attStatus').value
+            };
+            const res = await fetch('/api/admin/attendance/mark', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            if (res.ok) {
+                alert('Attendance marked!');
+                document.getElementById('attendanceForm').reset();
+                loadAttendance();
+            } else {
+                alert(result.message || 'Error marking attendance');
+            }
+        }
+
+        async function loadAttendance() {
+            const res = await fetch('/api/admin/attendance/all');
+            const records = await res.json();
+            const tbody = document.querySelector('#attendanceTable tbody');
+            tbody.innerHTML = records.map(r => `
+                <tr>
+                    <td>${r.name}</td>
+                    <td>${r.email}</td>
+                    <td>${r.dept_name}</td>
+                    <td>${r.attendance_date}</td>
+                    <td><span class="badge ${r.status === 'Present' ? 'badge-low' : r.status === 'Late' ? 'badge-medium' : 'badge-high'}">${r.status}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        async function addAnnouncement(e) {
+            e.preventDefault();
+            const data = {
+                title: document.getElementById('annTitle').value,
+                content: document.getElementById('annContent').value,
+                priority: document.getElementById('annPriority').value,
+                target_audience: document.getElementById('annAudience').value
+            };
+            const res = await fetch('/api/admin/announcements/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            if (res.ok) {
+                alert('Announcement added!');
+                document.getElementById('announcementForm').reset();
+                loadAnnouncements();
+            }
+        }
+
+        async function loadAnnouncements() {
+            const res = await fetch('/api/admin/announcements/all');
+            const announcements = await res.json();
+            const tbody = document.querySelector('#announcementsTable tbody');
+            tbody.innerHTML = announcements.map(a => {
+                const deptName = a.target_audience === 'All' ? 'All Departments' : 
+                    (departments.find(d => d.dept_id == a.target_audience)?.dept_name || a.target_audience);
+                return `
+                <tr>
+                    <td>${a.title}</td>
+                    <td>${a.content.substring(0, 50)}...</td>
+                    <td><span class="badge badge-${a.priority.toLowerCase()}">${a.priority}</span></td>
+                    <td>${deptName}</td>
+                    <td>${new Date(a.created_at).toLocaleDateString()}</td>
+                    <td><button class="btn-danger" onclick="deleteAnnouncement(${a.announcement_id})">Delete</button></td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        async function deleteAnnouncement(id) {
+            if (!confirm('Delete this announcement?')) return;
+            await fetch(`/api/admin/announcements/delete/${id}`, {method: 'DELETE'});
+            loadAnnouncements();
+        }
+
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                const form = e.target.closest('form');
+                if (form) form.requestSubmit();
+            }
+        });
+
+        checkAdmin();
+    </script>
+</body>
+</html>

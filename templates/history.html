@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task History - PriorityIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .history-container {
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .history-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            margin: 0;
+            font-size: 32px;
+        }
+
+        .stat-card p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #667eea, #764ba2);
+        }
+
+        .history-item {
+            position: relative;
+            margin-bottom: 30px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+
+        .history-item:hover {
+            transform: translateX(5px);
+        }
+
+        .history-item::before {
+            content: '';
+            position: absolute;
+            left: -33px;
+            top: 25px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid #667eea;
+            z-index: 1;
+        }
+
+        .history-item.created::before { border-color: #2ecc71; }
+        .history-item.status-changed::before { border-color: #3498db; }
+        .history-item.completed::before { border-color: #f39c12; }
+        .history-item.deleted::before { border-color: #e74c3c; }
+        .history-item.priority-changed::before { border-color: #9b59b6; }
+
+        .history-header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .action-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .action-badge.created { background: #2ecc71; color: white; }
+        .action-badge.status-changed { background: #3498db; color: white; }
+        .action-badge.completed { background: #f39c12; color: white; }
+        .action-badge.deleted { background: #e74c3c; color: white; }
+        .action-badge.priority-changed { background: #9b59b6; color: white; }
+        .action-badge.updated { background: #95a5a6; color: white; }
+
+        .history-time {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        .history-details {
+            margin-top: 10px;
+            color: #2c3e50;
+        }
+
+        .change-info {
+            background: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+
+        .change-arrow {
+            color: #3498db;
+            margin: 0 10px;
+        }
+
+        .no-history {
+            text-align: center;
+            padding: 60px 20px;
+            color: #95a5a6;
+        }
+
+        .no-history i {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="history-container">
+        <div class="history-header">
+            <h1>📜 Task History</h1>
+            <button onclick="window.location.href='/'" class="btn">Back to Dashboard</button>
+        </div>
+
+        <div class="history-stats" id="stats">
+            <!-- Stats will be loaded here -->
+        </div>
+
+        <div class="timeline" id="timeline">
+            <!-- History items will be loaded here -->
+        </div>
+    </div>
+
+    <script>
+        async function loadHistory() {
+            try {
+                // Load stats
+                const statsRes = await fetch('/api/history/stats');
+                const statsData = await statsRes.json();
+                
+                if (statsData.success) {
+                    displayStats(statsData.stats);
+                }
+
+                // Load recent history
+                const historyRes = await fetch('/api/history/recent?limit=50');
+                const historyData = await historyRes.json();
+                
+                if (historyData.success) {
+                    displayHistory(historyData.history);
+                }
+            } catch (error) {
+                console.error('Error loading history:', error);
+            }
+        }
+
+        function displayStats(stats) {
+            const statsHtml = `
+                <div class="stat-card">
+                    <h3>${stats.total_actions}</h3>
+                    <p>Total Actions</p>
+                </div>
+                <div class="stat-card">
+                    <h3>${stats.by_type.length}</h3>
+                    <p>Action Types</p>
+                </div>
+                <div class="stat-card">
+                    <h3>${stats.last_7_days.length}</h3>
+                    <p>Active Days (Last 7)</p>
+                </div>
+            `;
+            document.getElementById('stats').innerHTML = statsHtml;
+        }
+
+        function displayHistory(history) {
+            const timeline = document.getElementById('timeline');
+            
+            if (history.length === 0) {
+                timeline.innerHTML = `
+                    <div class="no-history">
+                        <div style="font-size: 64px;">📭</div>
+                        <h2>No History Yet</h2>
+                        <p>Start creating and managing tasks to see your activity history here!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const historyHtml = history.map(item => {
+                const actionClass = item.action_type.toLowerCase().replace('_', '-');
+                const time = new Date(item.changed_at).toLocaleString();
+                
+                let details = '';
+                if (item.field_changed && item.old_value && item.new_value) {
+                    details = `
+                        <div class="change-info">
+                            <strong>${item.field_changed}:</strong> 
+                            <span>${item.old_value}</span>
+                            <span class="change-arrow">→</span>
+                            <span>${item.new_value}</span>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="history-item ${actionClass}">
+                        <div class="history-header-info">
+                            <span class="action-badge ${actionClass}">${item.action_type.replace('_', ' ')}</span>
+                            <span class="history-time">${time}</span>
+                        </div>
+                        <div class="history-details">
+                            <strong>${item.task_title}</strong>
+                            ${details}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            timeline.innerHTML = historyHtml;
+        }
+
+        // Load history on page load
+        loadHistory();
+    </script>
+</body>
+</html>

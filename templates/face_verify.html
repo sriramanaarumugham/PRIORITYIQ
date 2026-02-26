@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Face Verification - PriorityIQ</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+
+<body>
+
+<nav class="topnav">
+    <h1>PriorityIQ</h1>
+</nav>
+
+<main class="container">
+    <div class="auth-container">
+        <h2>🔐 Face Verification</h2>
+        
+        <div class="card form-card">
+            <p style="text-align:center; color:#666;">
+                For your security, please verify your identity using face recognition
+            </p>
+
+            <div class="face-verification-container">
+                <video id="video" width="320" height="240" autoplay muted></video>
+                <canvas id="overlay" width="320" height="240"></canvas>
+            </div>
+
+            <div id="status" class="verification-status">
+                <p>📷 Initializing camera...</p>
+            </div>
+
+            <button id="captureBtn" class="btn" onclick="captureAndVerify()" disabled>
+                Capture & Verify Face
+            </button>
+
+            <button class="btn" onclick="skipVerification()" style="background:#95a5a6; margin-top:10px;">
+                Skip (Use OTP Only)
+            </button>
+
+            <div id="message" style="margin-top:15px; color: #e74c3c;"></div>
+        </div>
+    </div>
+</main>
+
+<script>
+let faceDescriptor = null;
+let modelsLoaded = false;
+
+// Load face-api models
+async function loadModels() {
+    const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+    
+    try {
+        await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+            faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+        ]);
+        modelsLoaded = true;
+        document.getElementById("status").innerHTML = '<p style="color:#2ecc71;">✅ Ready! Position your face in the camera</p>';
+        document.getElementById("captureBtn").disabled = false;
+    } catch(e) {
+        console.error("Model loading error:", e);
+        document.getElementById("status").innerHTML = '<p style="color:#e74c3c;">⚠️ Could not load face recognition. Please use OTP only.</p>';
+    }
+}
+
+// Start video stream
+async function startVideo() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { width: 320, height: 240 } 
+        });
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+        
+        video.addEventListener('loadedmetadata', () => {
+            loadModels();
+        });
+    } catch(e) {
+        console.error("Camera error:", e);
+        document.getElementById("status").innerHTML = '<p style="color:#e74c3c;">❌ Camera access denied. Please use OTP only.</p>';
+    }
+}
+
+// Capture and verify face
+async function captureAndVerify() {
+    if (!modelsLoaded) {
+        alert("Face recognition not ready. Please wait or skip.");
+        return;
+    }
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    
+    document.getElementById("status").innerHTML = '<p style="color:#f39c12;">🔍 Detecting face...</p>';
+    document.getElementById("captureBtn").disabled = true;
+
+    try {
+        // Detect face
+        const detection = await faceapi
+            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+
+        if (!detection) {
+            document.getElementById("status").innerHTML = '<p style="color:#e74c3c;">❌ No face detected. Please try again.</p>';
+            document.getElementById("captureBtn").disabled = false;
+            return;
+        }
+
+        // Draw detection box
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const resizedDetection = faceapi.resizeResults(detection, { width: 320, height: 240 });
+        faceapi.draw.drawDetections(canvas, resizedDetection);
+        faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
+
+        // Store face descriptor
+        faceDescriptor = detection.descriptor;
+
+        // Send to server
+        const email = sessionStorage.getItem('verifyEmail');
+        if (!email) {
+            alert("Session expired. Please login again.");
+            window.location.href = "/login";
+            return;
+        }
+
+        const res = await fetch("/api/auth/verify_face", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                email: email,
+                faceDescriptor: Array.from(faceDescriptor)
+            })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            document.getElementById("status").innerHTML = '<p style="color:#2ecc71;">✅ Face verified successfully!</p>';
+            setTimeout(() => {
+                window.location.href = "/";
+            }, 1000);
+        } else {
+            document.getElementById("status").innerHTML = `<p style="color:#e74c3c;">❌ ${data.message}</p>`;
+            document.getElementById("captureBtn").disabled = false;
+        }
+
+    } catch(e) {
+        console.error("Verification error:", e);
+        document.getElementById("status").innerHTML = '<p style="color:#e74c3c;">❌ Verification failed. Please try again.</p>';
+        document.getElementById("captureBtn").disabled = false;
+    }
+}
+
+function skipVerification() {
+    if (confirm("Skip face verification? You'll only use OTP authentication.")) {
+        window.location.href = "/";
+    }
+}
+
+// Start on page load
+document.addEventListener('DOMContentLoaded', () => {
+    startVideo();
+});
+</script>
+
+</body>
+</html>

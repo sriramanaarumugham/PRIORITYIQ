@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#4CAF50">
+    <title>Login - PriorityIQ</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" type="image/png" href="/static/icon-192.png">
+    <link rel="stylesheet" href="/static/style.css">
+    <script defer src="/static/pwa.js"></script>
+</head>
+<body>
+
+<nav class="topnav">
+    <h1>PriorityIQ</h1>
+    <div class="navlinks">
+        <a href="/register">Register</a>
+    </div>
+</nav>
+
+<main class="container">
+
+    <div class="auth-container">
+        <h2>Login to PriorityIQ</h2>
+        
+        <div class="card form-card">
+
+            <label>Email:</label>
+            <input type="email" id="email" placeholder="Enter your registered email" onkeypress="if(event.key==='Enter') requestOTP()">
+
+            <button class="btn" onclick="requestOTP()">Request OTP</button>
+
+            <p id="msg" style="margin-top: 15px; color: #e74c3c;"></p>
+
+            <p style="text-align:center; margin-top:20px;">
+                Don't have an account? <a href="/register">Register here</a><br>
+                <a href="/admin-login" style="margin-top:10px; display:inline-block;">Admin Login →</a>
+            </p>
+
+        </div>
+    </div>
+
+</main>
+
+<!-- OTP Popup Modal -->
+<div id="otpModal" class="modal">
+    <div class="modal-content">
+        <h3>Your OTP</h3>
+        <div class="otp-display" id="otpDisplay">------</div>
+        <p style="font-size: 14px; color: #666; margin-top: 10px;">
+            Please use this OTP to verify your login
+        </p>
+        <button class="btn" onclick="closeModal()">Got it!</button>
+    </div>
+</div>
+
+<script>
+async function requestOTP() {
+    const email = document.getElementById("email").value.trim();
+    const msgDiv = document.getElementById("msg");
+
+    if (!email) {
+        msgDiv.innerText = "Please enter your email";
+        msgDiv.style.color = "#e74c3c";
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/auth/request_otp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, login_type: "student" })
+        });
+
+        const data = await res.json();
+
+        if (!data.success) {
+            msgDiv.innerText = data.message;
+            msgDiv.style.color = "#e74c3c";
+            return;
+        }
+
+        // Show OTP in popup
+        document.getElementById("otpDisplay").innerText = data.otp;
+        document.getElementById("otpModal").style.display = "flex";
+        
+        // Store email for later use
+        sessionStorage.setItem('loginEmail', email);
+        
+        msgDiv.innerText = "OTP sent! Check the popup.";
+        msgDiv.style.color = "#2ecc71";
+
+    } catch (e) {
+        msgDiv.innerText = "Failed to request OTP. Please try again.";
+        msgDiv.style.color = "#e74c3c";
+    }
+}
+
+function closeModal() {
+    document.getElementById("otpModal").style.display = "none";
+    window.location.href = "/verify-otp";
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById("otpModal");
+    if (event.target == modal) {
+        modal.style.display = "none";
+    }
+}
+</script>
+
+</body>
+</html>
