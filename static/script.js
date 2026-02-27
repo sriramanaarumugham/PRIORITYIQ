@@ -3,6 +3,100 @@
 let allTasks = [];
 let pendingAdminWarningIds = [];
 
+function setClassMessage(text, isError = false) {
+    const msg = document.getElementById("classMsg");
+    if (!msg) return;
+    msg.textContent = text || "";
+    msg.style.color = isError ? "#e74c3c" : "#0f9d58";
+}
+
+async function loadClasses() {
+    const list = document.getElementById("classList");
+    if (!list) return;
+    try {
+        const res = await fetch("/api/classes/my");
+        if (!res.ok) {
+            list.innerHTML = "<p>Unable to load classes.</p>";
+            return;
+        }
+        const data = await res.json();
+        const classes = data.classes || [];
+        if (!classes.length) {
+            list.innerHTML = "<p>No classes yet. Create or join one.</p>";
+            return;
+        }
+        list.innerHTML = classes.map(c => `
+            <div class="class-item">
+                <div class="class-pill">${(c.role || "member").toUpperCase()}</div>
+                <h3>${c.name}</h3>
+                <div class="class-meta">
+                    <span>Code: <strong>${c.code}</strong></span>
+                    <span>Owner: ${c.owner_name || "Unknown"}</span>
+                </div>
+            </div>
+        `).join("");
+    } catch (e) {
+        console.error("Class load error:", e);
+        list.innerHTML = "<p>Unable to load classes.</p>";
+    }
+}
+
+async function createClassroom() {
+    const input = document.getElementById("classNameInput");
+    if (!input) return;
+    const name = input.value.trim();
+    if (!name) {
+        setClassMessage("Class name is required.", true);
+        return;
+    }
+    try {
+        const res = await fetch("/api/classes/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            setClassMessage(data.message || "Failed to create class.", true);
+            return;
+        }
+        setClassMessage(`Class created. Join code: ${data.code}`);
+        input.value = "";
+        loadClasses();
+    } catch (e) {
+        console.error("Create class error:", e);
+        setClassMessage("Failed to create class.", true);
+    }
+}
+
+async function joinClassroom() {
+    const input = document.getElementById("classCodeInput");
+    if (!input) return;
+    const code = input.value.trim();
+    if (!code) {
+        setClassMessage("Join code is required.", true);
+        return;
+    }
+    try {
+        const res = await fetch("/api/classes/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            setClassMessage(data.message || "Failed to join class.", true);
+            return;
+        }
+        setClassMessage("Joined class successfully.");
+        input.value = "";
+        loadClasses();
+    } catch (e) {
+        console.error("Join class error:", e);
+        setClassMessage("Failed to join class.", true);
+    }
+}
+
 // Load tasks on dashboard
 async function loadTasks() {
     const taskList = document.getElementById("taskList");
@@ -444,6 +538,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadTasks();
         loadRiskAlerts();
         showAdminWarningOnLogin();
+        loadClasses();
         
         // Check for deadline alerts every 5 minutes
         setInterval(loadRiskAlerts, 5 * 60 * 1000);

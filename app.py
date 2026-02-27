@@ -6,6 +6,7 @@ from routes.chatbot_routes import chatbot_bp
 from routes.gamify_routes import gamify_bp
 from routes.history_routes import history_bp
 from routes.admin_routes import admin_bp, is_admin as is_admin_user
+from routes.class_routes import class_bp
 import os
 from dotenv import load_dotenv
 import secrets
@@ -33,6 +34,7 @@ app.register_blueprint(chatbot_bp, url_prefix='/api/chatbot')
 app.register_blueprint(gamify_bp, url_prefix='/api/gamify')
 app.register_blueprint(history_bp, url_prefix='/api/history')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
+app.register_blueprint(class_bp, url_prefix='/api/classes')
 
 def login_required():
     return "user_id" in session
