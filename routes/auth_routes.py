@@ -3,6 +3,7 @@ import secrets
 from db_connection import get_db_connection
 import json
 from datetime import datetime, timedelta
+import os
 
 auth_bp = Blueprint('auth_bp', __name__)
 
@@ -11,6 +12,64 @@ ALLOWED_LOGIN_TYPES = {"student", "admin"}
 def admin_table_exists(cursor):
     cursor.execute("SHOW TABLES LIKE %s", ("admin_credentials",))
     return cursor.fetchone() is not None
+
+def users_column_exists(cursor, column_name):
+    cursor.execute(
+        """
+        SELECT 1
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'users'
+          AND COLUMN_NAME = %s
+        LIMIT 1
+        """,
+        (column_name,),
+    )
+    return cursor.fetchone() is not None
+
+def admin_credentials_column_exists(cursor, column_name):
+    try:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'admin_credentials'
+              AND COLUMN_NAME = %s
+            LIMIT 1
+            """,
+            (column_name,),
+        )
+        return cursor.fetchone() is not None
+    except Exception:
+        # Some DB users may not have INFORMATION_SCHEMA access.
+        return False
+
+def is_admin_credential_email(cursor, email, user):
+    try:
+        if admin_table_exists(cursor):
+            if admin_credentials_column_exists(cursor, "active"):
+                cursor.execute(
+                    "SELECT 1 FROM admin_credentials WHERE email=%s AND active=TRUE",
+                    (email,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT 1 FROM admin_credentials WHERE email=%s",
+                    (email,),
+                )
+            return cursor.fetchone() is not None
+    except Exception:
+        # Fallback for schema mismatch (e.g. missing `active`) or query restrictions.
+        try:
+            cursor.execute(
+                "SELECT 1 FROM admin_credentials WHERE email=%s",
+                (email,),
+            )
+            return cursor.fetchone() is not None
+        except Exception:
+            pass
+    return bool(user.get("is_admin", False))
 
 def clear_otp_session():
     session.pop("otp", None)
@@ -87,6 +146,112 @@ def register():
         traceback.print_exc()
         return jsonify({"success": False, "message": "Server error"}), 500
 
+@auth_bp.route("/register_admin", methods=["POST"])
+def register_admin():
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "message": "Invalid request"}), 400
+
+        name = data.get("name", "").strip()
+        email = data.get("email", "").strip().lower()
+        phone = data.get("phone", "").strip()
+        department = data.get("department", "").strip()
+        admin_key = data.get("admin_key", "").strip()
+
+        required_admin_key = os.getenv("ADMIN_REGISTRATION_KEY", "").strip()
+        if not required_admin_key:
+            return jsonify({
+                "success": False,
+                "message": "Admin registration is unavailable. Server configuration is incomplete."
+            }), 503
+
+        if not admin_key or admin_key != required_admin_key:
+            return jsonify({"success": False, "message": "Invalid admin registration key"}), 403
+
+        if not name or not email or not phone:
+            return jsonify({"success": False, "message": "Name, email, and phone are required"}), 400
+
+        if "@" not in email:
+            return jsonify({"success": False, "message": "Invalid email format"}), 400
+
+        if not phone.isdigit() or len(phone) < 10:
+            return jsonify({"success": False, "message": "Invalid phone number"}), 400
+
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({"success": False, "message": "Database connection failed"}), 500
+
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT 1 FROM users WHERE email=%s", (email,))
+        if cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Email already registered"}), 400
+
+        cursor.execute("SELECT 1 FROM users WHERE phone=%s AND phone IS NOT NULL", (phone,))
+        if cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "message": "Phone number already registered"}), 400
+
+        insert_columns = ["name", "email", "phone"]
+        insert_values = [name, email, phone]
+
+        if users_column_exists(cursor, "role"):
+            insert_columns.append("role")
+            insert_values.append("admin")
+        if users_column_exists(cursor, "department"):
+            insert_columns.append("department")
+            insert_values.append(department if department else None)
+        if users_column_exists(cursor, "password"):
+            insert_columns.append("password")
+            insert_values.append("")
+        if users_column_exists(cursor, "is_admin"):
+            insert_columns.append("is_admin")
+            insert_values.append(True)
+
+        placeholders = ", ".join(["%s"] * len(insert_columns))
+        column_clause = ", ".join(insert_columns)
+        cursor.execute(
+            f"INSERT INTO users ({column_clause}) VALUES ({placeholders})",
+            tuple(insert_values),
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_credentials (
+                admin_id INT AUTO_INCREMENT PRIMARY KEY,
+                email VARCHAR(255) NOT NULL UNIQUE,
+                active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            INSERT INTO admin_credentials (email, active)
+            VALUES (%s, TRUE)
+            ON DUPLICATE KEY UPDATE active=TRUE
+            """,
+            (email,),
+        )
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": "Admin registration successful! Please login from admin portal."
+        }), 201
+
+    except Exception as e:
+        print(f"Error in register_admin: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": "Server error"}), 500
+
 @auth_bp.route("/request_otp", methods=["POST"])
 def request_otp():
     try:
@@ -116,14 +281,7 @@ def request_otp():
             return jsonify({"success": False, "message": "Email not registered. Please register first."}), 404
 
         # Check if user type matches login type (admin credentials live in admin_credentials)
-        if admin_table_exists(cursor):
-            cursor.execute(
-                "SELECT 1 FROM admin_credentials WHERE email=%s AND active=TRUE",
-                (email,)
-            )
-            is_admin_credential = cursor.fetchone() is not None
-        else:
-            is_admin_credential = user.get("is_admin", False)
+        is_admin_credential = is_admin_credential_email(cursor, email, user)
 
         if login_type == "admin" and not is_admin_credential:
             cursor.close()
@@ -156,7 +314,7 @@ def request_otp():
         print(f"Error in request_otp: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "message": "Server error"}), 500
+        return jsonify({"success": False, "message": f"Server error: {str(e)}"}), 500
 
 @auth_bp.route("/verify_otp", methods=["POST"])
 def verify_otp():
@@ -206,14 +364,7 @@ def verify_otp():
             user = cursor.fetchone()
 
             if user:
-                if admin_table_exists(cursor):
-                    cursor.execute(
-                        "SELECT 1 FROM admin_credentials WHERE email=%s AND active=TRUE",
-                        (email,)
-                    )
-                    is_admin_credential = cursor.fetchone() is not None
-                else:
-                    is_admin_credential = user.get("is_admin", False)
+                is_admin_credential = is_admin_credential_email(cursor, email, user)
 
                 if login_type == "admin" and not is_admin_credential:
                     cursor.close()

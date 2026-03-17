@@ -43,6 +43,7 @@
             <p id="msg" style="margin-top: 15px; color: #e74c3c;"></p>
 
             <p style="text-align:center; margin-top:20px;">
+                New admin? <a href="/admin-register">Register admin account</a><br>
                 <a href="/login">&larr; Back to Student Login</a>
             </p>
 
@@ -81,10 +82,18 @@ async function requestOTP() {
             body: JSON.stringify({ email, login_type: "admin" })
         });
 
-        const data = await res.json();
+        let data = null;
+        try {
+            data = await res.json();
+        } catch (parseError) {
+            const raw = await res.text();
+            msgDiv.innerText = raw ? raw.slice(0, 200) : "Server returned invalid response";
+            msgDiv.style.color = "#e74c3c";
+            return;
+        }
 
-        if (!data.success) {
-            msgDiv.innerText = data.message;
+        if (!res.ok || !data.success) {
+            msgDiv.innerText = data.message || `Request failed (${res.status})`;
             msgDiv.style.color = "#e74c3c";
             return;
         }

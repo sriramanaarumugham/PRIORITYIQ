@@ -1,4 +1,4 @@
-from flask import Flask, render_template, session, redirect, send_from_directory
+from flask import Flask, render_template, session, redirect, send_from_directory, Response
 from routes.auth_routes import auth_bp
 from routes.task_routes import task_bp
 from routes.predict_routes import predict_bp
@@ -8,6 +8,7 @@ from routes.history_routes import history_bp
 from routes.admin_routes import admin_bp, is_admin as is_admin_user
 from routes.class_routes import class_bp
 import os
+import inspect
 from dotenv import load_dotenv
 import secrets
 
@@ -20,6 +21,18 @@ except ImportError:
     print("Email reminders disabled (missing dependencies)")
 
 load_dotenv()
+
+# Compatibility patch:
+# Some environments have Flask that passes `partitioned` to set_cookie
+# while older Werkzeug Response.set_cookie does not accept that argument.
+if "partitioned" not in inspect.signature(Response.set_cookie).parameters:
+    _orig_set_cookie = Response.set_cookie
+
+    def _set_cookie_compat(self, *args, **kwargs):
+        kwargs.pop("partitioned", None)
+        return _orig_set_cookie(self, *args, **kwargs)
+
+    Response.set_cookie = _set_cookie_compat
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
@@ -87,6 +100,10 @@ def login_page():
 @app.route("/admin-login")
 def admin_login_page():
     return render_template("admin_login.html")
+
+@app.route("/admin-register")
+def admin_register_page():
+    return render_template("admin_register.html")
 
 @app.route("/register")
 def register_page():
